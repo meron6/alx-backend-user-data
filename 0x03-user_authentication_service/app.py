@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from auth import Auth
 from flask import Flask, jsonify, request, abort, redirect
 
@@ -10,48 +11,38 @@ app = Flask(__name__)
 def welcome() -> str:
     """ GET /
     Return:
-        - welcome message
+        - welcome
     """
     return jsonify({"message": "Bienvenue"}), 200
 
 
 @app.route('/users', methods=['POST'], strict_slashes=False)
-def users() -> str:
+def user() -> str:
     """ POST /users
     Return:
-        - user creation status message
+        - message
     """
     email = request.form.get('email')
     password = request.form.get('password')
-    
-    # Handle missing email or password
-    if not email or not password:
-        return jsonify({"message": "Missing email or password"}), 400
-
     try:
         AUTH.register_user(email, password)
-        return jsonify({"email": email, "message": "user created"}), 200
-    except ValueError:
+        return jsonify({"email": f"{email}", "message": "user created"}), 200
+    except Exception:
         return jsonify({"message": "email already registered"}), 400
 
 
 @app.route('/sessions', methods=['POST'], strict_slashes=False)
-def sessions_login() -> str:
+def login() -> str:
     """ POST /sessions
-    Return:
-        - login status message
+      Return:
+        - message
     """
     email = request.form.get('email')
     password = request.form.get('password')
-    
-    # Handle missing email or password
-    if not email or not password:
-        return jsonify({"message": "Missing email or password"}), 400
-
     valid_login = AUTH.valid_login(email, password)
     if valid_login:
         session_id = AUTH.create_session(email)
-        response = jsonify({"email": email, "message": "logged in"})
+        response = jsonify({"email": f"{email}", "message": "logged in"})
         response.set_cookie('session_id', session_id)
         return response
     else:
@@ -59,20 +50,16 @@ def sessions_login() -> str:
 
 
 @app.route('/sessions', methods=['DELETE'], strict_slashes=False)
-def sessions_logout() -> str:
+def logout() -> str:
     """ DELETE /sessions
-    Return:
-        - logout status message
+      Return:
+        - message
     """
     session_id = request.cookies.get('session_id')
     user = AUTH.get_user_from_session_id(session_id)
-    
     if user:
         AUTH.destroy_session(user.id)
-        # Clear the session_id cookie upon logout
-        response = redirect('/')
-        response.delete_cookie('session_id')
-        return response
+        return redirect('/')
     else:
         abort(403)
 
@@ -80,15 +67,46 @@ def sessions_logout() -> str:
 @app.route('/profile', methods=['GET'], strict_slashes=False)
 def profile() -> str:
     """ GET /profile
-    Return:
-        - user profile information
+      Return:
+        - message
     """
     session_id = request.cookies.get('session_id')
     user = AUTH.get_user_from_session_id(session_id)
-    
     if user:
-        return jsonify({"email": user.email, "message": "profile found"}), 200
+        return jsonify({"email": user.email}), 200
     else:
+        abort(403)
+
+
+@app.route('/reset_password', methods=['POST'], strict_slashes=False)
+def get_reset_password_token() -> str:
+    """ POST /reset_password
+      Return:
+        - message
+    """
+    email = request.form.get('email')
+    user = AUTH.create_session(email)
+    if not user:
+        abort(403)
+    else:
+        token = AUTH.get_reset_password_token(email)
+        return jsonify({"email": f"{email}", "reset_token": f"{token}"})
+
+
+@app.route('/reset_password', methods=['PUT'], strict_slashes=False)
+def update_password() -> str:
+    """ PUT /reset_password
+      Return:
+        - message
+    """
+    email = request.form.get('email')
+    reset_token = request.form.get('reset_token')
+    new_psw = request.form.get('new_password')
+    try:
+        AUTH.update_password(reset_token, new_psw)
+        return jsonify({"email": f"{email}",
+                        "message": "Password updated"}), 200
+    except Exception:
         abort(403)
 
 
