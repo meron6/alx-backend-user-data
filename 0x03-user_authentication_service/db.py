@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DB module."""
+"""DB module"""
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -11,28 +11,30 @@ from typing import TypeVar
 
 VALID_FIELDS = ['id', 'email', 'hashed_password', 'session_id', 'reset_token']
 
+
 class DB:
-    """DB class."""
+    """DB class"""
 
     def __init__(self) -> None:
-        """Initialize a new DB instance."""
+        """Initialize a new DB instance"""
         self._engine = create_engine("sqlite:///a.db", echo=True)
-        Base.metadata.drop_all(self._engine)
         Base.metadata.create_all(self._engine)
         self.__session = None
 
     @property
     def _session(self) -> Session:
-        """Memoized session object."""
+        """Memoized session object"""
         if self.__session is None:
             DBSession = sessionmaker(bind=self._engine)
             self.__session = DBSession()
         return self.__session
 
     def add_user(self, email: str, hashed_password: str) -> User:
-        """Adds a new user to the database."""
+        """
+        Adds a new user to the Database.
+        """
         if not email or not hashed_password:
-            return None
+            raise ValueError("Email and password must be provided.")
         user = User(email=email, hashed_password=hashed_password)
         session = self._session
         session.add(user)
@@ -40,26 +42,29 @@ class DB:
         return user
 
     def find_user_by(self, **kwargs) -> User:
-        """Finds a user in the database."""
-        if not kwargs or any(field not in VALID_FIELDS for field in kwargs):
+        """
+        Finds a User in the Database.
+        """
+        if not kwargs or any(x not in VALID_FIELDS for x in kwargs):
             raise InvalidRequestError
         session = self._session
         try:
-            user = session.query(User).filter_by(**kwargs).one()
+            return session.query(User).filter_by(**kwargs).one()
         except NoResultFound:
-            raise NoResultFound
-        return user
+            raise NoResultFound(f"User not found with parameters {kwargs}")
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """Updates a user in the database."""
-        if not user_id or not kwargs:
-            raise ValueError("Missing user_id or fields to update.")
-        if any(key not in VALID_FIELDS for key in kwargs):
-            raise InvalidRequestError
+        """
+        Updates a user in the database.
+        """
         session = self._session
-        user = session.query(User).get(user_id)
-        if user is None:
-            raise NoResultFound
-        for key, value in kwargs.items():
-            setattr(user, key, value)
+        try:
+            user = self.find_user_by(id=user_id)
+        except NoResultFound:
+            raise NoResultFound(f"User with id {user_id} not found")
+        
+        for k, v in kwargs.items():
+            if k not in VALID_FIELDS:
+                raise ValueError(f"Field {k} is not valid")
+            setattr(user, k, v)
         session.commit()
